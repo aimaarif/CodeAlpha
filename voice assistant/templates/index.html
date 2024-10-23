@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speech to Wikipedia</title>
+</head>
+<body>
+    <h1>Speak and Get Wikipedia Summary</h1>
+
+    <button id="recordButton">Start Recording</button>
+    <button id="stopButton" disabled>Stop Recording</button>
+
+    <div id="output">
+        <p><strong>Recognized Text:</strong> <span id="recognizedText"></span></p>
+        <p><strong>Wikipedia Summary:</strong> <span id="wikiSummary"></span></p>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        
+
+        document.getElementById('recordButton').addEventListener('click', async () => {
+            // Start recording
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start();
+
+            document.getElementById('recordButton').disabled = true;
+            document.getElementById('stopButton').disabled = false;
+
+            mediaRecorder.ondataavailable = event => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                audioChunks = [];  // Clear the audio chunks for next recording
+
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'audio.wav');
+
+                // Send audio file to the Flask server
+                console.log("Uploading audio...");
+
+                const response = await fetch('../process_audio', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log("Response data:", data);
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    document.getElementById('recognizedText').innerText = data.message;
+                    document.getElementById('wikiSummary').innerText = data.summary;
+                }
+
+                document.getElementById('recordButton').disabled = false;
+                document.getElementById('stopButton').disabled = true;
+            };
+        });
+
+        document.getElementById('stopButton').addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === "recording") {
+                mediaRecorder.stop();
+                console.log("Recording stopped.");
+            }
+        });
+    </script>
+</body>
+</html>
